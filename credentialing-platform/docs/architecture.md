@@ -62,6 +62,11 @@ or storage.
 3. **Aggregate.** Results roll up into a `CredentialingCase`. Status is derived:
    all `VERIFIED` → `COMPLETED`; any `DISCREPANCY`/`NOT_FOUND`/`ERROR` →
    `ACTION_REQUIRED` (human review).
+4. **Push back (outbound).** `POST /cases/{id}/push` maps the case into each
+   system of record's native shape and writes it back (mirror of ingest), so
+   the ATS/EMR/CRM reflects verified status with no re-keying. Enrollment and
+   X12 EDI (270) submit back through the clearinghouses. See
+   [`outbound.md`](outbound.md).
 
 ## Status model
 
@@ -91,8 +96,11 @@ replaces implementations behind the existing interfaces:
   return a case in `IN_PROGRESS`, streaming results as connectors complete.
 - **Connector concurrency & rate limits.** Add per-source retry, timeout, and
   rate-limit policy in a wrapper around `PrimarySourceConnector`.
-- **Webhooks out.** Emit `case.completed` / `case.action_required` events back
-  to the originating ATS/EMR/CRM to close the loop.
+- **Push-back automation.** Outbound push is manual today (`POST
+  /cases/{id}/push`). Auto-trigger it on `case.completed` and emit
+  `case.action_required` webhooks to the originating ATS/EMR/CRM. Replace the
+  mocked outbound `_transport` with the real system APIs and clearinghouse EDI
+  endpoints.
 - **Compliance.** HIPAA-grade audit logging (every `VerificationResult`
   already carries `checked_at` + raw `data` for traceability), encryption at
   rest, PII access controls, and configurable data retention.

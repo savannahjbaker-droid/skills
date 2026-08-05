@@ -52,12 +52,26 @@ export AVAILITY_CLIENT_SECRET=...
 Unconfigured, it returns an `ERROR` result explaining it needs credentials —
 matching reality: you must onboard with Availity before it can verify anything.
 
+## Outbound: enrollment & EDI submission
+
+A clearinghouse is also the *transport* for outbound EDI, so the connectors
+carry two more methods (mocked defaults in the base, real-shaped in Availity):
+
+```python
+async def submit_enrollment(self, provider, payer) -> EnrollmentSubmission  # payer EDI enrollment
+async def submit_edi(self, transaction) -> EdiAcknowledgment                # X12 (e.g. 270) transport
+```
+
+See [`outbound.md`](outbound.md) for the flows and the X12 270 builder.
+
 ## Endpoints
 
 - `POST /providers/{id}/verify` — **full** credentialing run: PSV **and**
   clearinghouse payer enrollment, aggregated into one case.
 - `POST /providers/{id}/payer-enrollment` — clearinghouse-only run for the
   enrollment team, without re-running PSV.
+- `POST /providers/{id}/enrollment-submissions` — submit payer enrollment (outbound).
+- `POST /providers/{id}/eligibility` — build & submit an X12 270 (outbound).
 
 ## Adding a clearinghouse
 

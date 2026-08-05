@@ -59,9 +59,8 @@ Contact object with custom `__c` fields.
 
 The endpoint and upsert logic work unchanged.
 
-## Outbound (future)
+## Outbound
 
-The MVP ingests inbound. Closing the loop — pushing verified status back to the
-originating ATS/EMR/CRM — is a symmetric `OutboundAdapter` per system, triggered
-by `case.completed` / `case.action_required` events. See
-[`architecture.md`](architecture.md#from-mvp-to-production).
+Closing the loop — pushing verified status back to the originating ATS/EMR/CRM —
+is implemented as a symmetric `OutboundSystemAdapter` per system. See
+[`outbound.md`](outbound.md).

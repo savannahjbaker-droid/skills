@@ -50,13 +50,26 @@ class CaseRepository:
         return list(self._by_id.values())
 
 
+class ControlNumbers:
+    """Monotonic source of X12 interchange control numbers (unique per process)."""
+
+    def __init__(self) -> None:
+        self._n = 0
+
+    def next(self) -> int:
+        self._n += 1
+        return self._n
+
+
 # Module-level singletons used by the app. Tests reset these via `reset()`.
 providers = ProviderRepository()
 cases = CaseRepository()
+control_numbers = ControlNumbers()
 
 
 def reset() -> None:
     """Clear all state. Used by tests for isolation."""
-    global providers, cases
+    global providers, cases, control_numbers
     providers = ProviderRepository()
     cases = CaseRepository()
+    control_numbers = ControlNumbers()

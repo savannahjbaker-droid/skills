@@ -6,6 +6,7 @@ clearinghouses exist. Adding one is a one-line change here.
 
 from __future__ import annotations
 
+from ..models import VerificationSource
 from .availity import AvailityConnector
 from .base import ClearinghouseConnector
 from .mocked import (
@@ -13,6 +14,14 @@ from .mocked import (
     OfficeAllyConnector,
     WaystarConnector,
 )
+
+
+def get_clearinghouse(source: VerificationSource) -> ClearinghouseConnector:
+    """Look up a single clearinghouse connector by its source enum."""
+    for ch in default_clearinghouses():
+        if ch.source == source:
+            return ch
+    raise KeyError(f"No clearinghouse registered for '{source}'")
 
 
 def default_clearinghouses() -> list[ClearinghouseConnector]:
@@ -37,4 +46,5 @@ __all__ = [
     "WaystarConnector",
     "OfficeAllyConnector",
     "default_clearinghouses",
+    "get_clearinghouse",
 ]

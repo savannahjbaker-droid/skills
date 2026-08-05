@@ -22,6 +22,9 @@ outbound integrations plug into the same interfaces without touching the core.
 | CAQH / PECOS / state-board connectors | 🔶 mocked — real contract, deterministic stub data (require credentials/portal access to make live) |
 | Change Healthcare / Waystar / Office Ally clearinghouses | 🔶 mocked — real contract, deterministic enrollment data |
 | ATS / EMR / Salesforce inbound adapters | ✅ real normalization logic; endpoints accept native payloads |
+| ATS / EMR / Salesforce **outbound** push-back | ✅ real mapping logic; mocked transport |
+| **X12 270** EDI builder | ✅ real, deterministic 5010 envelope; validated in tests |
+| Payer enrollment + EDI submission | 🔶 mocked (Availity real-shaped: enrollment + X12 endpoints) |
 | Data store | 🔶 in-memory (swap for Postgres behind the same repo interface) |
 
 ## Quick start
@@ -56,6 +59,14 @@ curl -s localhost:8000/cases/<CASE_ID>
 
 # Or check payer enrollment only (clearinghouses), e.g. for the enrollment team
 curl -s -X POST localhost:8000/providers/<PROVIDER_ID>/payer-enrollment
+
+# 4. Push the results back to the systems of record (no re-keying)
+curl -s -X POST localhost:8000/cases/<CASE_ID>/push
+
+# 5. Submit an X12 270 connectivity probe through a clearinghouse
+curl -s localhost:8000/providers/<PROVIDER_ID>/eligibility \
+  -H 'content-type: application/json' \
+  -d '{"payer": "Aetna", "clearinghouse": "waystar"}'
 ```
 
 ## Architecture at a glance
@@ -63,14 +74,16 @@ curl -s -X POST localhost:8000/providers/<PROVIDER_ID>/payer-enrollment
 ```
                                    PSV sources: NPPES · CAQH · PECOS · State boards
   ATS / EMR / Salesforce           Clearinghouses: Availity · Change HC · Waystar · Office Ally
-          │  (native payloads)                     ▲  (verify / payer-enrollment queries)
-          ▼                                         │
+          │  (native payloads)                     ▲ │ (verify / enroll / submit X12)
+          ▼                                         │ ▼
   ┌───────────────┐   canonical    ┌────────────────────────────┐
   │ InboundAdapter │ ─ Provider ──▶ │ Verification orchestrator  │
   └───────────────┘                └────────────────────────────┘
-          │                                         │
-          ▼                                         ▼
-     Provider store                        CredentialingCase
+          ▲                                         │
+          │  (push results back)                    ▼
+  ┌────────────────┐  ◀── case ───────────── CredentialingCase
+  │ OutboundAdapter│                                │
+  └────────────────┘                          Provider / Case store
 ```
 
 - **One canonical `Provider` model.** Every integration normalizes into it, so
@@ -79,13 +92,17 @@ curl -s -X POST localhost:8000/providers/<PROVIDER_ID>/payer-enrollment
   clearinghouse — implements the same `verify(provider) -> result`. The
   orchestrator runs them concurrently and isolates failures per source.
 - **Clearinghouses** verify *payer enrollment* (can this provider bill each
-  payer) rather than identity — same interface, layered with a per-payer map.
+  payer) rather than identity — and carry the outbound EDI submission methods.
+- **Outbound closes the loop.** Results push back to ATS/EMR/Salesforce
+  (`OutboundAdapter`, mirror of inbound), and enrollment + X12 EDI (270) submit
+  through the clearinghouses.
 
 See [`docs/`](./docs) for detail:
 - [`docs/architecture.md`](docs/architecture.md) — components, data flow, scaling path
 - [`docs/api.md`](docs/api.md) — endpoint reference
 - [`docs/connectors.md`](docs/connectors.md) — adding a PSV source
 - [`docs/clearinghouses.md`](docs/clearinghouses.md) — clearinghouses & payer enrollment
+- [`docs/outbound.md`](docs/outbound.md) — push-back + EDI enrollment / X12 270 submission
 - [`docs/integrations.md`](docs/integrations.md) — adding an ATS/EMR/CRM adapter
 
 ## Project layout
@@ -95,9 +112,11 @@ app/
   models.py              Canonical domain models (Provider, Case, results)
   store.py               In-memory repositories
   connectors/            PSV sources (base + NPPES + mocked CAQH/PECOS/board)
-  clearinghouses/        Payer-enrollment connectors (Availity + mocked CH/Waystar/OA)
+  clearinghouses/        Payer-enrollment + EDI submission (Availity + mocked CH/Waystar/OA)
   integrations/          Inbound adapters (ATS/EMR/Salesforce → Provider)
+  outbound/              Outbound adapters (Provider/Case → systems) + X12 EDI builder
   services/verification.py   Concurrent, fault-isolated PSV orchestration
+  services/outbound.py       Push-back + enrollment/EDI submission orchestration
   api/                   FastAPI routers
 tests/                   Pytest suite (offline; NPPES via httpx MockTransport)
 docs/                    Architecture & how-to docs

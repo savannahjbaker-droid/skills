@@ -16,7 +16,14 @@ from __future__ import annotations
 from abc import abstractmethod
 
 from ..connectors.base import PrimarySourceConnector
-from ..models import Provider, VerificationResult, VerificationStatus
+from ..models import (
+    EdiAcknowledgment,
+    EdiTransaction,
+    EnrollmentSubmission,
+    Provider,
+    VerificationResult,
+    VerificationStatus,
+)
 
 #: National payers checked when a provider names no `target_payers`.
 DEFAULT_PAYERS = ["Aetna", "Cigna", "UnitedHealthcare", "Anthem BCBS", "Humana"]
@@ -71,3 +78,35 @@ class ClearinghouseConnector(PrimarySourceConnector):
             discrepancies=[f"payer enrollment {statuses[p]}: {p}" for p in gaps],
             data={"payer_enrollment": statuses},
         )
+
+    # --- Outbound: submit enrollment & EDI through the clearinghouse --------- #
+
+    async def submit_enrollment(
+        self, provider: Provider, payer: str
+    ) -> EnrollmentSubmission:
+        """Submit a payer EDI/transaction enrollment request via this
+        clearinghouse. Default is a mocked accepted submission; real connectors
+        override with the live enrollment API/EDI feed."""
+        return EnrollmentSubmission(
+            clearinghouse=self.source,
+            payer=payer,
+            submitted=True,
+            tracking_id=f"{self.source.value}-{(provider.npi or 'NONPI')}-{_slug(payer)}",
+            message="Enrollment request queued (mocked).",
+        )
+
+    async def submit_edi(self, transaction: EdiTransaction) -> EdiAcknowledgment:
+        """Submit an X12 EDI transaction and return the acknowledgment. Default
+        is a mocked 999 acceptance; real connectors override with the live EDI
+        endpoint."""
+        return EdiAcknowledgment(
+            accepted=True,
+            ack_type="999",
+            status_code="A",
+            control_number=transaction.control_number,
+            messages=[f"Accepted {transaction.transaction_set} for {transaction.payer} (mocked)."],
+        )
+
+
+def _slug(value: str) -> str:
+    return "".join(ch for ch in value.upper() if ch.isalnum())[:15] or "PAYER"

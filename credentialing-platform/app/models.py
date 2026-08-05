@@ -141,3 +141,74 @@ class CredentialingCase(BaseModel):
             self.status = CaseStatus.ACTION_REQUIRED
         else:
             self.status = CaseStatus.IN_PROGRESS
+
+
+# --------------------------------------------------------------------------- #
+# Outbound models — pushing results back out to systems of record and payers.
+# --------------------------------------------------------------------------- #
+
+
+class PushStatus(str, Enum):
+    ACCEPTED = "accepted"  # the system of record acknowledged the update
+    SKIPPED = "skipped"  # provider has no ID in that system, nothing to push
+    ERROR = "error"
+
+
+class PushReceipt(BaseModel):
+    """Result of pushing a credentialing case back to one system of record."""
+
+    system: SourceSystem
+    external_id: Optional[str] = None
+    status: PushStatus
+    message: Optional[str] = None
+    # The system-native field map that was written (for audit/traceability).
+    payload: dict[str, Any] = Field(default_factory=dict)
+    pushed_at: datetime = Field(default_factory=_now)
+
+
+class EnrollmentSubmission(BaseModel):
+    """Result of submitting a payer EDI/transaction enrollment via a clearinghouse."""
+
+    clearinghouse: VerificationSource
+    payer: str
+    submitted: bool
+    tracking_id: Optional[str] = None
+    message: Optional[str] = None
+    submitted_at: datetime = Field(default_factory=_now)
+
+
+class EligibilitySubscriber(BaseModel):
+    """The member/patient an eligibility (270) inquiry is about.
+
+    For a post-enrollment connectivity probe, a payer's designated test member
+    is used. Defaults here are clearly-labeled test values.
+    """
+
+    member_id: str = "TESTMEMBER0"
+    first_name: str = "TEST"
+    last_name: str = "SUBSCRIBER"
+    dob: date = date(1970, 1, 1)
+
+
+class EdiTransaction(BaseModel):
+    """An outbound X12 EDI transaction ready to submit to a clearinghouse."""
+
+    transaction_set: str  # e.g. "270"
+    payer: str
+    control_number: int
+    x12: str  # the fully-formed X12 interchange
+
+
+class EdiAcknowledgment(BaseModel):
+    """A clearinghouse's acknowledgment of a submitted EDI transaction.
+
+    Models the TA1/999 acknowledgment layer: was the interchange structurally
+    accepted for onward delivery to the payer.
+    """
+
+    accepted: bool
+    ack_type: str = "999"  # 999 functional ack (or TA1 interchange ack)
+    status_code: str = "A"  # A=accepted, E=accepted-with-errors, R=rejected
+    control_number: Optional[int] = None
+    messages: list[str] = Field(default_factory=list)
+    received_at: datetime = Field(default_factory=_now)

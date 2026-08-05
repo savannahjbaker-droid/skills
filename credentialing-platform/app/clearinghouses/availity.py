@@ -19,7 +19,13 @@ from typing import Optional
 import httpx
 
 from ..config import AvailitySettings
-from ..models import Provider, VerificationSource
+from ..models import (
+    EdiAcknowledgment,
+    EdiTransaction,
+    EnrollmentSubmission,
+    Provider,
+    VerificationSource,
+)
 from .base import ENROLLED, NOT_ENROLLED, ClearinghouseConnector
 
 
@@ -60,6 +66,69 @@ class AvailityConnector(ClearinghouseConnector):
                 body = resp.json()
                 statuses[payer] = body.get("status", NOT_ENROLLED)
             return statuses
+        finally:
+            if owns_client:
+                await client.aclose()
+
+    async def submit_enrollment(
+        self, provider: Provider, payer: str
+    ) -> EnrollmentSubmission:
+        if not self._settings.configured and self._client is None:
+            raise RuntimeError(
+                "Availity credentials not configured "
+                "(set AVAILITY_CLIENT_ID / AVAILITY_CLIENT_SECRET)."
+            )
+        client = self._client or httpx.AsyncClient(timeout=20.0)
+        owns_client = self._client is None
+        base = self._settings.base_url
+        try:
+            token = await self._token(client, base)
+            resp = await client.post(
+                f"{base}/v1/transaction-enrollments",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"npi": provider.npi, "payer": payer},
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            return EnrollmentSubmission(
+                clearinghouse=self.source,
+                payer=payer,
+                submitted=True,
+                tracking_id=body.get("id"),
+                message=body.get("status", "submitted"),
+            )
+        finally:
+            if owns_client:
+                await client.aclose()
+
+    async def submit_edi(self, transaction: EdiTransaction) -> EdiAcknowledgment:
+        if not self._settings.configured and self._client is None:
+            raise RuntimeError(
+                "Availity credentials not configured "
+                "(set AVAILITY_CLIENT_ID / AVAILITY_CLIENT_SECRET)."
+            )
+        client = self._client or httpx.AsyncClient(timeout=20.0)
+        owns_client = self._client is None
+        base = self._settings.base_url
+        try:
+            token = await self._token(client, base)
+            resp = await client.post(
+                f"{base}/v1/x12",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/edi-x12",
+                },
+                content=transaction.x12,
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            return EdiAcknowledgment(
+                accepted=body.get("status", "A") in ("A", "E"),
+                ack_type=body.get("ack_type", "999"),
+                status_code=body.get("status", "A"),
+                control_number=transaction.control_number,
+                messages=body.get("messages", []),
+            )
         finally:
             if owns_client:
                 await client.aclose()

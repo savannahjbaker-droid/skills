@@ -95,3 +95,26 @@ Example (ATS):
 ```
 
 See [`integrations.md`](integrations.md) for each system's field mapping.
+
+## Outbound
+
+Push results back out to systems of record and payers. See
+[`outbound.md`](outbound.md).
+
+### `POST /cases/{case_id}/push`
+Push a credentialing case back to every system of record the provider exists in
+(ATS/EMR/Salesforce). → `200` `{ "case_id": …, "receipts": PushReceipt[] }` / `404`.
+Each receipt is `accepted` (with the written field map), `skipped` (no ID in that
+system), or `error`.
+
+### `POST /providers/{provider_id}/enrollment-submissions`
+Submit a payer EDI/transaction enrollment through a clearinghouse.
+Body: `{ "payer": "Aetna", "clearinghouse": "change_healthcare" }`
+→ `200` `EnrollmentSubmission` (tracking ID + status) / `404`.
+
+### `POST /providers/{provider_id}/eligibility`
+Build an **X12 270** and submit it through a clearinghouse (post-enrollment
+connectivity probe).
+Body: `{ "payer": "Aetna", "clearinghouse": "waystar", "subscriber"?: {...} }`
+→ `200` `{ "transaction": EdiTransaction, "acknowledgment": EdiAcknowledgment }` / `404`.
+`transaction.x12` is the full interchange string.
