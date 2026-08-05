@@ -8,10 +8,15 @@ lives at the edges; the core only ever sees canonical types.
 1. **`InboundAdapter`** (integrations) — maps a system-of-record payload onto
    the canonical `Provider`. One per source system (ATS, EMR, Salesforce, …).
 2. **`PrimarySourceConnector`** (verification) — `verify(provider) -> VerificationResult`.
-   One per PSV source (NPPES, CAQH, PECOS, state boards, … up to 2000+).
+   One per source: a PSV database (NPPES, CAQH, PECOS, state boards, … up to
+   2000+) **or** a clearinghouse (Availity, Change Healthcare/Optum, Waystar,
+   Office Ally). Clearinghouses implement the same interface via
+   `ClearinghouseConnector`, which verifies *payer enrollment* rather than
+   identity — see [`clearinghouses.md`](clearinghouses.md).
 
 Because both sides speak only `Provider` / `VerificationResult`, adding a source
-system or a PSV database never touches routing, orchestration, or storage.
+system, a PSV database, or a clearinghouse never touches routing, orchestration,
+or storage.
 
 ## Components
 
@@ -26,10 +31,14 @@ system or a PSV database never touches routing, orchestration, or storage.
                          ┌──────────────▼───────────────────────┐
   Trigger verify     ─▶  │  POST /providers/{id}/verify          │
                          │        └─ run_verifications(provider) │
-                         │             ├─ NPPESConnector  ──▶ NPI Registry
-                         │             ├─ CAQHConnector   ──▶ CAQH ProView
-                         │             ├─ PECOSConnector  ──▶ CMS PECOS
-                         │             └─ StateBoard...   ──▶ state portals
+                         │   PSV:   ├─ NPPESConnector  ──▶ NPI Registry
+                         │          ├─ CAQHConnector   ──▶ CAQH ProView
+                         │          ├─ PECOSConnector  ──▶ CMS PECOS
+                         │          └─ StateBoard...   ──▶ state portals
+                         │   Clghs: ├─ AvailityConnector ─▶ Availity API
+                         │          ├─ ChangeHealthcare  ─▶ Optum/CHC
+                         │          ├─ Waystar           ─▶ Waystar API
+                         │          └─ OfficeAlly        ─▶ Office Ally EDI
                          └──────────────┬───────────────────────┘
                                         ▼
                               CredentialingCase (aggregated results + status)
@@ -45,9 +54,11 @@ system or a PSV database never touches routing, orchestration, or storage.
    syncs update the same record instead of duplicating it. This is the
    "no manual re-keying between systems" boundary.
 2. **Verify.** `POST /providers/{id}/verify` fans out to every registered
-   connector **concurrently** (`asyncio.gather`). Each connector returns a
-   normalized `VerificationResult`; a connector that raises is converted into an
-   `ERROR` result so one flaky source can't sink the case.
+   connector **concurrently** (`asyncio.gather`) — PSV sources *and*
+   clearinghouse payer-enrollment checks. Each connector returns a normalized
+   `VerificationResult`; a connector that raises is converted into an `ERROR`
+   result so one flaky source can't sink the case. `POST
+   /providers/{id}/payer-enrollment` runs the clearinghouses only.
 3. **Aggregate.** Results roll up into a `CredentialingCase`. Status is derived:
    all `VERIFIED` → `COMPLETED`; any `DISCREPANCY`/`NOT_FOUND`/`ERROR` →
    `ACTION_REQUIRED` (human review).

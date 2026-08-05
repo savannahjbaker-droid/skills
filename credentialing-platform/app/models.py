@@ -35,12 +35,26 @@ class SourceSystem(str, Enum):
 
 
 class VerificationSource(str, Enum):
-    """Primary source verification (PSV) providers we can query."""
+    """Sources we can query for verification data.
 
+    Two families share this enum because both produce a `VerificationResult`
+    and run through the same orchestrator:
+      * PSV sources verify identity / licensure / enrollment eligibility.
+      * Clearinghouses verify *payer enrollment* — whether the provider can
+        actually submit claims/eligibility to each payer they reach.
+    """
+
+    # --- Primary source verification (PSV) ---
     NPPES = "nppes"  # National Plan & Provider Enumeration System (NPI registry)
     CAQH = "caqh"  # Council for Affordable Quality Healthcare
     PECOS = "pecos"  # Provider Enrollment, Chain, and Ownership System (Medicare)
     STATE_BOARD = "state_board"  # State medical board license verification
+
+    # --- Clearinghouses (payer connectivity / EDI enrollment) ---
+    AVAILITY = "availity"
+    CHANGE_HEALTHCARE = "change_healthcare"  # Optum / Change Healthcare
+    WAYSTAR = "waystar"
+    OFFICE_ALLY = "office_ally"
 
 
 class VerificationStatus(str, Enum):
@@ -79,6 +93,9 @@ class Provider(BaseModel):
     specialty: Optional[str] = None
     licenses: list[License] = Field(default_factory=list)
     email: Optional[str] = None
+    # Payers this provider should be enrolled with (checked via clearinghouses).
+    # Empty means "use the clearinghouse's default national payer set".
+    target_payers: list[str] = Field(default_factory=list)
     source_system: SourceSystem = SourceSystem.API
     # IDs of this provider in the external systems of record, keyed by system.
     external_ids: dict[str, str] = Field(default_factory=dict)

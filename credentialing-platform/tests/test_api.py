@@ -57,8 +57,25 @@ def test_verify_flow_end_to_end(monkeypatch):
     assert case.status_code == 200
     body = case.json()
     assert body["provider_id"] == created["id"]
-    assert len(body["results"]) == 4  # nppes, caqh, pecos, state_board
+    # 4 PSV sources + 4 clearinghouses
+    sources = {r["source"] for r in body["results"]}
+    assert sources == {
+        "nppes", "caqh", "pecos", "state_board",
+        "availity", "change_healthcare", "waystar", "office_ally",
+    }
 
     fetched = client.get(f"/cases/{body['id']}")
     assert fetched.status_code == 200
     assert fetched.json()["id"] == body["id"]
+
+
+def test_payer_enrollment_endpoint_runs_clearinghouses_only():
+    created = client.post(
+        "/providers",
+        json={"first_name": "Jane", "last_name": "Smith", "npi": "1234567893"},
+    ).json()
+
+    resp = client.post(f"/providers/{created['id']}/payer-enrollment")
+    assert resp.status_code == 200
+    sources = {r["source"] for r in resp.json()["results"]}
+    assert sources == {"availity", "change_healthcare", "waystar", "office_ally"}

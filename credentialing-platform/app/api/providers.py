@@ -21,6 +21,7 @@ class ProviderCreate(BaseModel):
     specialty: Optional[str] = None
     licenses: list[License] = []
     email: Optional[str] = None
+    target_payers: list[str] = []
     source_system: SourceSystem = SourceSystem.API
     external_ids: dict[str, str] = {}
 

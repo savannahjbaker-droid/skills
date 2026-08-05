@@ -22,7 +22,8 @@ Body:
   "credential": "MD",
   "specialty": "Cardiology",
   "email": "jane@example.com",
-  "licenses": [{"state": "CA", "number": "A12345", "expiration": "2027-01-31"}]
+  "licenses": [{"state": "CA", "number": "A12345", "expiration": "2027-01-31"}],
+  "target_payers": ["Aetna", "Cigna"]
 }
 ```
 → `201` with the created `Provider` (server-assigned `id`).
@@ -36,8 +37,9 @@ Fetch one provider. → `200` `Provider` / `404`.
 ## Credentialing
 
 ### `POST /providers/{provider_id}/verify`
-Run primary source verification across every registered connector
-concurrently, persist a `CredentialingCase`, and return it.
+Full credentialing run across every registered connector concurrently — PSV
+sources **and** clearinghouse payer-enrollment checks — persisted as a
+`CredentialingCase`.
 → `200` `CredentialingCase` / `404` if provider unknown.
 
 ```json
@@ -49,10 +51,20 @@ concurrently, persist a `CredentialingCase`, and return it.
     {"source": "nppes", "status": "verified", "discrepancies": [], "data": {…}},
     {"source": "caqh",  "status": "verified", "data": {…}},
     {"source": "pecos", "status": "verified", "data": {…}},
-    {"source": "state_board", "status": "not_found", "error": "No licenses submitted to verify."}
+    {"source": "state_board", "status": "not_found", "error": "No licenses submitted to verify."},
+    {"source": "availity", "status": "verified",
+     "data": {"payer_enrollment": {"Aetna": "enrolled", "Cigna": "enrolled"}}},
+    {"source": "office_ally", "status": "discrepancy",
+     "discrepancies": ["payer enrollment pending: Humana"],
+     "data": {"payer_enrollment": {"Aetna": "enrolled", "Humana": "pending"}}}
   ]
 }
 ```
+
+### `POST /providers/{provider_id}/payer-enrollment`
+Clearinghouse-only run (Availity, Change Healthcare, Waystar, Office Ally) —
+checks payer enrollment without re-running PSV. Same `CredentialingCase` shape.
+→ `200` / `404`. See [`clearinghouses.md`](clearinghouses.md).
 
 ### `GET /cases`
 List all credentialing cases. → `200` `CredentialingCase[]`

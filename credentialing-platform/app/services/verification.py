@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 from typing import Optional, Sequence
 
+from ..clearinghouses import default_clearinghouses
 from ..connectors import PrimarySourceConnector, default_registry
 from ..models import (
     CredentialingCase,
@@ -18,6 +19,12 @@ from ..models import (
     VerificationResult,
     VerificationStatus,
 )
+
+
+def full_registry() -> list[PrimarySourceConnector]:
+    """The complete set run for a credentialing case: PSV sources **and**
+    clearinghouse payer-enrollment checks."""
+    return [*default_registry(), *default_clearinghouses()]
 
 
 async def _safe_verify(
@@ -37,8 +44,12 @@ async def run_verifications(
     provider: Provider,
     connectors: Optional[Sequence[PrimarySourceConnector]] = None,
 ) -> CredentialingCase:
-    """Verify `provider` across all sources concurrently and build a case."""
-    connectors = list(connectors) if connectors is not None else default_registry()
+    """Verify `provider` across all sources concurrently and build a case.
+
+    Defaults to the full registry (PSV sources + clearinghouse payer enrollment).
+    Pass an explicit `connectors` list to scope the run (e.g. clearinghouses only).
+    """
+    connectors = list(connectors) if connectors is not None else full_registry()
     results = await asyncio.gather(
         *(_safe_verify(c, provider) for c in connectors)
     )

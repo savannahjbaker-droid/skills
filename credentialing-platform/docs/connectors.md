@@ -12,6 +12,11 @@ class PrimarySourceConnector(ABC):
 The orchestrator (`app/services/verification.py`) runs every registered
 connector concurrently and never lets one source's failure affect another.
 
+> Clearinghouses (Availity, Change Healthcare/Optum, Waystar, Office Ally) are a
+> sibling connector family built on this same interface but focused on **payer
+> enrollment** rather than identity/licensure. See
+> [`clearinghouses.md`](clearinghouses.md).
+
 ## Included connectors
 
 | Connector | Source | Status | Real integration |
