@@ -30,6 +30,21 @@ outbound integrations plug into the same interfaces without touching the core.
 
 ## Quick start
 
+### Docker (recommended)
+
+```bash
+cd credentialing-platform
+docker compose up --build
+# API at http://localhost:8000  · interactive docs at /docs
+```
+
+Runs with no configuration. To make the Availity connector live, copy
+`.env.example` to `.env` and fill in your Availity credentials before starting;
+without them Availity reports "not configured" and the other connectors run
+normally.
+
+### Local Python
+
 ```bash
 cd credentialing-platform
 pip install -r requirements.txt
@@ -41,6 +56,12 @@ uvicorn app.main:app --reload
 # Run tests (no network required)
 pytest -q
 ```
+
+> **Live external sources need outbound internet.** NPPES is a public API (no key
+> needed) and verifies for real once the host can be reached; if your environment
+> blocks egress you'll see NPPES report an `ERROR` result, isolated from the rest
+> of the case. CAQH/PECOS/state boards and most clearinghouses are mocked until
+> you supply their credentials/agreements.
 
 ## Try it
 
