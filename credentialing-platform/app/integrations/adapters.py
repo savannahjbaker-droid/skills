@@ -27,6 +27,7 @@ class ATSAdapter(InboundAdapter):
             specialty=payload.get("specialty"),
             email=payload.get("email"),
             licenses=_licenses(payload.get("licenses")),
+            target_payers=payload.get("target_payers", []),
             source_system=self.system,
             external_ids=self._external_ids(payload),
         )
@@ -47,6 +48,7 @@ class EMRAdapter(InboundAdapter):
             specialty=payload.get("primary_specialty") or payload.get("specialty"),
             email=payload.get("contact_email") or payload.get("email"),
             licenses=_licenses(payload.get("licenses")),
+            target_payers=payload.get("target_payers", []),
             source_system=self.system,
             external_ids=self._external_ids(payload),
         )
@@ -66,6 +68,7 @@ class SalesforceAdapter(InboundAdapter):
             specialty=payload.get("Specialty__c"),
             email=payload.get("Email"),
             licenses=_licenses(payload.get("Licenses__r")),
+            target_payers=payload.get("Target_Payers__c", []),
             source_system=self.system,
             external_ids=self._external_ids(payload),
         )

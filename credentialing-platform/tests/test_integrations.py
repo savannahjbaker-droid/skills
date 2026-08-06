@@ -20,6 +20,19 @@ def test_ats_adapter_maps_fields():
     assert provider.licenses[0].state == "CA"
 
 
+def test_ats_adapter_maps_target_payers():
+    adapter = get_adapter(SourceSystem.ATS)
+    provider = adapter.to_provider(
+        {
+            "candidate_id": "C-100",
+            "first_name": "Jane",
+            "last_name": "Smith",
+            "target_payers": ["Aetna", "Cigna"],
+        }
+    )
+    assert provider.target_payers == ["Aetna", "Cigna"]
+
+
 def test_emr_adapter_handles_nested_name():
     adapter = get_adapter(SourceSystem.EMR)
     provider = adapter.to_provider(
