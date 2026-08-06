@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from .api import integrations, outbound, providers, verifications
+from .api import integrations, outbound, providers, verifications, webhooks
 
 app = FastAPI(
     title="Credentialing Platform API",
@@ -28,6 +28,7 @@ app.include_router(providers.router)
 app.include_router(verifications.router)
 app.include_router(integrations.router)
 app.include_router(outbound.router)
+app.include_router(webhooks.router)
 
 
 @app.get("/health", tags=["meta"])

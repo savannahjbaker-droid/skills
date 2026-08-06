@@ -212,3 +212,55 @@ class EdiAcknowledgment(BaseModel):
     control_number: Optional[int] = None
     messages: list[str] = Field(default_factory=list)
     received_at: datetime = Field(default_factory=_now)
+
+
+class ClaimLine(BaseModel):
+    """A single service line on a professional (837P) claim."""
+
+    procedure_code: str  # HCPCS/CPT, e.g. "99213"
+    charge: float
+    units: int = 1
+
+
+class Claim(BaseModel):
+    """Minimal professional claim used to build an 837P."""
+
+    patient_control_number: str = "PCN0001"
+    diagnosis_codes: list[str] = Field(default_factory=lambda: ["Z0000"])
+    lines: list[ClaimLine] = Field(default_factory=list)
+    subscriber: "EligibilitySubscriber" = Field(default_factory=lambda: EligibilitySubscriber())
+
+    @property
+    def total_charge(self) -> float:
+        return round(sum(line.charge * line.units for line in self.lines), 2)
+
+
+# --------------------------------------------------------------------------- #
+# Webhooks — outbound event notifications to registered subscribers.
+# --------------------------------------------------------------------------- #
+
+# Event types the platform emits.
+EVENT_CASE_COMPLETED = "case.completed"
+EVENT_CASE_ACTION_REQUIRED = "case.action_required"
+EVENT_CASE_PUSHED = "case.pushed"
+
+
+class WebhookSubscription(BaseModel):
+    id: str = Field(default_factory=_uuid)
+    url: str
+    # Event types to receive; empty means "all events".
+    events: list[str] = Field(default_factory=list)
+    active: bool = True
+    created_at: datetime = Field(default_factory=_now)
+
+    def wants(self, event: str) -> bool:
+        return self.active and (not self.events or event in self.events)
+
+
+class WebhookDelivery(BaseModel):
+    subscription_id: str
+    event: str
+    ok: bool
+    status_code: Optional[int] = None
+    error: Optional[str] = None
+    delivered_at: datetime = Field(default_factory=_now)

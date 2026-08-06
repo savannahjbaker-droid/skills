@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .models import CredentialingCase, Provider
+from .models import CredentialingCase, Provider, WebhookSubscription
 
 
 class ProviderRepository:
@@ -50,6 +50,21 @@ class CaseRepository:
         return list(self._by_id.values())
 
 
+class WebhookRepository:
+    def __init__(self) -> None:
+        self._by_id: dict[str, WebhookSubscription] = {}
+
+    def add(self, sub: WebhookSubscription) -> WebhookSubscription:
+        self._by_id[sub.id] = sub
+        return sub
+
+    def list(self) -> list[WebhookSubscription]:
+        return list(self._by_id.values())
+
+    def matching(self, event: str) -> list[WebhookSubscription]:
+        return [s for s in self._by_id.values() if s.wants(event)]
+
+
 class ControlNumbers:
     """Monotonic source of X12 interchange control numbers (unique per process)."""
 
@@ -64,12 +79,14 @@ class ControlNumbers:
 # Module-level singletons used by the app. Tests reset these via `reset()`.
 providers = ProviderRepository()
 cases = CaseRepository()
+webhooks = WebhookRepository()
 control_numbers = ControlNumbers()
 
 
 def reset() -> None:
     """Clear all state. Used by tests for isolation."""
-    global providers, cases, control_numbers
+    global providers, cases, webhooks, control_numbers
     providers = ProviderRepository()
     cases = CaseRepository()
+    webhooks = WebhookRepository()
     control_numbers = ControlNumbers()

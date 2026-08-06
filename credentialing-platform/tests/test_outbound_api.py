@@ -54,3 +54,41 @@ def test_eligibility_endpoint_returns_edi_and_ack():
     assert body["transaction"]["transaction_set"] == "270"
     assert body["transaction"]["x12"].startswith("ISA*")
     assert body["acknowledgment"]["accepted"] is True
+
+
+def test_claims_endpoint_builds_and_submits_837():
+    provider_id, _ = _make_provider_with_case()
+    resp = client.post(
+        f"/providers/{provider_id}/claims",
+        json={
+            "payer": "Aetna",
+            "clearinghouse": "change_healthcare",
+            "claim": {
+                "patient_control_number": "PCN9",
+                "diagnosis_codes": ["E1165"],
+                "lines": [{"procedure_code": "99213", "charge": 150.0, "units": 1}],
+            },
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["transaction"]["transaction_set"] == "837"
+    assert "ST*837*" in body["transaction"]["x12"]
+    assert body["acknowledgment"]["accepted"] is True
+
+
+def test_verify_auto_push_runs_push_path():
+    # With no webhook subscribers, emit() is a no-op (no network). This exercises
+    # the auto_push branch end to end and confirms it still returns the case.
+    # Webhook *delivery* is covered network-free in test_webhooks.py.
+    provider = client.post(
+        "/providers",
+        json={
+            "first_name": "Jane", "last_name": "Smith", "npi": "1234567893",
+            "external_ids": {"salesforce": "003xx"},
+        },
+    ).json()
+
+    resp = client.post(f"/providers/{provider['id']}/verify?auto_push=true")
+    assert resp.status_code == 200
+    assert resp.json()["provider_id"] == provider["id"]

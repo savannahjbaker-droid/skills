@@ -118,3 +118,30 @@ connectivity probe).
 Body: `{ "payer": "Aetna", "clearinghouse": "waystar", "subscriber"?: {...} }`
 → `200` `{ "transaction": EdiTransaction, "acknowledgment": EdiAcknowledgment }` / `404`.
 `transaction.x12` is the full interchange string.
+
+### `POST /providers/{provider_id}/claims`
+Build an **X12 837P** professional claim and submit it through a clearinghouse.
+Body: `{ "payer": "Aetna", "clearinghouse": "change_healthcare", "claim": {
+"patient_control_number": "PCN9", "diagnosis_codes": ["E1165"], "lines": [
+{"procedure_code": "99213", "charge": 150.0, "units": 1} ] } }`
+→ `200` `{ "transaction": EdiTransaction, "acknowledgment": EdiAcknowledgment }` / `404`.
+
+## Webhooks
+
+Event notifications. Emitted types: `case.completed`, `case.action_required`,
+`case.pushed`. See [`outbound.md`](outbound.md#webhooks--auto-push).
+
+### `POST /webhooks`
+Register a subscriber. Body: `{ "url": "https://…", "events": ["case.pushed"] }`
+(empty `events` = all). → `201` `WebhookSubscription`.
+
+### `GET /webhooks`
+List subscriptions. → `200` `WebhookSubscription[]`.
+
+### `GET /webhooks/events`
+List the event types the platform emits. → `200` `string[]`.
+
+Delivery is `POST {url}` with body `{ "event": "...", "data": {...} }`.
+
+Note: `POST /providers/{id}/verify` accepts `?auto_push=true` to push results to
+systems of record and emit `case.pushed` right after verification.

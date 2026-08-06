@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from .. import store
 from ..models import (
+    Claim,
     EdiAcknowledgment,
     EdiTransaction,
     EligibilitySubscriber,
@@ -23,6 +24,7 @@ from ..models import (
 )
 from ..services.outbound import (
     push_case_to_systems,
+    submit_claim,
     submit_eligibility_probe,
     submit_enrollment,
 )
@@ -96,3 +98,32 @@ async def submit_eligibility(
         subscriber=body.subscriber,
     )
     return EligibilityResponse(transaction=txn, acknowledgment=ack)
+
+
+class ClaimRequest(BaseModel):
+    payer: str
+    claim: Claim
+    clearinghouse: VerificationSource = VerificationSource.CHANGE_HEALTHCARE
+
+
+class ClaimResponse(BaseModel):
+    transaction: EdiTransaction
+    acknowledgment: EdiAcknowledgment
+
+
+@router.post("/providers/{provider_id}/claims", response_model=ClaimResponse)
+async def submit_professional_claim(
+    provider_id: str, body: ClaimRequest
+) -> ClaimResponse:
+    """Build an X12 837P professional claim and submit it through a clearinghouse."""
+    provider = store.providers.get(provider_id)
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    txn, ack = await submit_claim(
+        provider,
+        body.payer,
+        body.claim,
+        body.clearinghouse,
+        control_number=store.control_numbers.next(),
+    )
+    return ClaimResponse(transaction=txn, acknowledgment=ack)

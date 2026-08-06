@@ -64,8 +64,20 @@ NM1*IL*1*SUBSCRIBER*TEST****MI*TESTMEMBER0~  DMG*D8*19700101~  DTP*291*D8*202608
 SE*13*0001~   GE*1*1~   IEA*1*000000001~
 ```
 
-The 837 (claim) and other transaction sets plug into the same `x12.py`
-envelope + `submit_edi` transport — add a builder alongside `eligibility.py`.
+## 4. Submit an X12 837P claim through a clearinghouse
+
+`POST /providers/{id}/claims` with `{payer, clearinghouse, claim}` builds a real
+**X12 5010 837P** (professional claim) and submits it, returning the EDI and the
+`EdiAcknowledgment`. The `claim` carries a patient control number, diagnosis
+codes, and service lines (`{procedure_code, charge, units}`); the total charge is
+derived and placed on `CLM02`.
+
+The 837P builder (`app/outbound/edi/claims.py`) reuses the same `x12.py` envelope
+as the 270 and produces the standard loop skeleton payers expect: 1000A/1000B
+submitter & receiver, 2000A/2010AA billing provider, 2000B/2010BA subscriber,
+2010BB payer, 2300 claim, and one 2400 service line per `ClaimLine`. Any further
+transaction set (835, 276/277, …) drops in the same way — a builder plus the
+shared `submit_edi` transport.
 
 ## Where submission lives
 
@@ -81,3 +93,23 @@ class ClearinghouseConnector(PrimarySourceConnector):
 
 Base gives mocked-accepted defaults; `AvailityConnector` overrides all three
 real-shaped.
+
+## Webhooks & auto-push
+
+The platform emits events so downstream systems learn about outcomes without
+polling. Register a subscriber with `POST /webhooks` (`{url, events?}`; empty
+`events` = all). Delivery is `POST {url}` with `{"event": ..., "data": ...}`,
+best-effort and fault-isolated — one subscriber failing never affects another or
+the triggering request (`app/services/events.py`, injectable client).
+
+Event types (`GET /webhooks/events`):
+- `case.completed` — a verify run finished all-clear
+- `case.action_required` — a verify run needs human review
+- `case.pushed` — results were pushed back to systems of record (payload carries
+  the `PushReceipt[]`)
+
+**Auto-push:** `POST /providers/{id}/verify?auto_push=true` pushes results to the
+systems of record immediately after verification and emits `case.pushed`. The
+HTTP response stays the `CredentialingCase`; receipts arrive via the webhook (or
+call `POST /cases/{id}/push` for them inline). This is the "verify → update every
+system automatically" path.

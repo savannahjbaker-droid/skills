@@ -14,6 +14,7 @@ from typing import Optional
 
 from ..clearinghouses import get_clearinghouse
 from ..models import (
+    Claim,
     CredentialingCase,
     EdiAcknowledgment,
     EdiTransaction,
@@ -23,7 +24,7 @@ from ..models import (
     PushReceipt,
     VerificationSource,
 )
-from ..outbound.edi import build_270
+from ..outbound.edi import build_270, build_837p
 from ..outbound.systems import OUTBOUND_ADAPTERS
 
 
@@ -72,6 +73,25 @@ async def submit_eligibility_probe(
     generated EDI and the acknowledgment."""
     subscriber = subscriber or EligibilitySubscriber()
     txn = build_270(provider, payer, subscriber, control_number, now or _now())
+    return await _submit_txn(txn, clearinghouse, control_number)
+
+
+async def submit_claim(
+    provider: Provider,
+    payer: str,
+    claim: Claim,
+    clearinghouse: VerificationSource,
+    control_number: int,
+    now: Optional[datetime] = None,
+) -> tuple[EdiTransaction, EdiAcknowledgment]:
+    """Build an 837P and submit it through the clearinghouse."""
+    txn = build_837p(provider, payer, claim, control_number, now or _now())
+    return await _submit_txn(txn, clearinghouse, control_number)
+
+
+async def _submit_txn(
+    txn: EdiTransaction, clearinghouse: VerificationSource, control_number: int
+) -> tuple[EdiTransaction, EdiAcknowledgment]:
     connector = get_clearinghouse(clearinghouse)
     try:
         ack = await connector.submit_edi(txn)

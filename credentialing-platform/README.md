@@ -23,7 +23,8 @@ outbound integrations plug into the same interfaces without touching the core.
 | Change Healthcare / Waystar / Office Ally clearinghouses | 🔶 mocked — real contract, deterministic enrollment data |
 | ATS / EMR / Salesforce inbound adapters | ✅ real normalization logic; endpoints accept native payloads |
 | ATS / EMR / Salesforce **outbound** push-back | ✅ real mapping logic; mocked transport |
-| **X12 270** EDI builder | ✅ real, deterministic 5010 envelope; validated in tests |
+| **X12 270 & 837P** EDI builders | ✅ real, deterministic 5010 envelopes; validated in tests |
+| **Outbound webhooks** + auto-push | ✅ real dispatch (fault-isolated, injectable client) |
 | Payer enrollment + EDI submission | 🔶 mocked (Availity real-shaped: enrollment + X12 endpoints) |
 | Data store | 🔶 in-memory (swap for Postgres behind the same repo interface) |
 
@@ -67,6 +68,16 @@ curl -s -X POST localhost:8000/cases/<CASE_ID>/push
 curl -s localhost:8000/providers/<PROVIDER_ID>/eligibility \
   -H 'content-type: application/json' \
   -d '{"payer": "Aetna", "clearinghouse": "waystar"}'
+
+# 6. Submit an X12 837P professional claim through a clearinghouse
+curl -s localhost:8000/providers/<PROVIDER_ID>/claims \
+  -H 'content-type: application/json' \
+  -d '{"payer":"Aetna","clearinghouse":"change_healthcare","claim":{"diagnosis_codes":["E1165"],"lines":[{"procedure_code":"99213","charge":150.0}]}}'
+
+# Verify + auto-push to systems of record, and register a webhook for events
+curl -s -X POST 'localhost:8000/providers/<PROVIDER_ID>/verify?auto_push=true'
+curl -s localhost:8000/webhooks -H 'content-type: application/json' \
+  -d '{"url": "https://example.com/hook", "events": ["case.completed", "case.pushed"]}'
 ```
 
 ## Architecture at a glance
@@ -94,8 +105,9 @@ curl -s localhost:8000/providers/<PROVIDER_ID>/eligibility \
 - **Clearinghouses** verify *payer enrollment* (can this provider bill each
   payer) rather than identity — and carry the outbound EDI submission methods.
 - **Outbound closes the loop.** Results push back to ATS/EMR/Salesforce
-  (`OutboundAdapter`, mirror of inbound), and enrollment + X12 EDI (270) submit
-  through the clearinghouses.
+  (`OutboundAdapter`, mirror of inbound); enrollment + X12 EDI (270 eligibility,
+  837P claims) submit through the clearinghouses; and `case.*` **webhooks** (with
+  optional auto-push) notify downstream systems.
 
 See [`docs/`](./docs) for detail:
 - [`docs/architecture.md`](docs/architecture.md) — components, data flow, scaling path
@@ -114,9 +126,10 @@ app/
   connectors/            PSV sources (base + NPPES + mocked CAQH/PECOS/board)
   clearinghouses/        Payer-enrollment + EDI submission (Availity + mocked CH/Waystar/OA)
   integrations/          Inbound adapters (ATS/EMR/Salesforce → Provider)
-  outbound/              Outbound adapters (Provider/Case → systems) + X12 EDI builder
+  outbound/              Outbound adapters (Provider/Case → systems) + X12 EDI (270, 837P)
   services/verification.py   Concurrent, fault-isolated PSV orchestration
   services/outbound.py       Push-back + enrollment/EDI submission orchestration
+  services/events.py         Outbound webhook dispatch (fault-isolated)
   api/                   FastAPI routers
 tests/                   Pytest suite (offline; NPPES via httpx MockTransport)
 docs/                    Architecture & how-to docs
