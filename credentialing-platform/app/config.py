@@ -32,3 +32,23 @@ class AvailitySettings:
     @property
     def configured(self) -> bool:
         return bool(self.client_id and self.client_secret)
+
+
+@dataclass
+class InNetworkSettings:
+    """InNetwork.ai (Credflow) uses a bearer API key. Issue one in the
+    InNetwork.ai settings page (use a sandbox key for testing)."""
+
+    api_key: str | None = None
+    base_url: str = "https://innetwork-be.credflow.ai/v1"
+
+    @classmethod
+    def from_env(cls) -> "InNetworkSettings":
+        return cls(
+            api_key=os.getenv("INNETWORK_API_KEY"),
+            base_url=os.getenv("INNETWORK_BASE_URL", cls.base_url),
+        )
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.api_key)

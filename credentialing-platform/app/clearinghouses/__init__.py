@@ -9,6 +9,7 @@ from __future__ import annotations
 from ..models import VerificationSource
 from .availity import AvailityConnector
 from .base import ClearinghouseConnector
+from .innetwork import InNetworkConnector
 from .mocked import (
     ChangeHealthcareConnector,
     OfficeAllyConnector,
@@ -45,6 +46,7 @@ __all__ = [
     "ChangeHealthcareConnector",
     "WaystarConnector",
     "OfficeAllyConnector",
+    "InNetworkConnector",
     "default_clearinghouses",
     "get_clearinghouse",
 ]

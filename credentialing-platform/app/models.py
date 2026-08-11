@@ -56,6 +56,9 @@ class VerificationSource(str, Enum):
     WAYSTAR = "waystar"
     OFFICE_ALLY = "office_ally"
 
+    # --- Network-status APIs ---
+    INNETWORK = "innetwork"  # InNetwork.ai (Credflow)
+
 
 class VerificationStatus(str, Enum):
     PENDING = "pending"
