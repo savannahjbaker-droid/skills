@@ -1,0 +1,21 @@
+services:
+  api:
+    build: .
+    image: credentialing-platform:latest
+    ports:
+      - "8000:8000"
+    # Availity credentials (optional). Copy .env.example to .env and fill in to
+    # make the Availity connector live; unset, it reports "not configured".
+    # Compose auto-loads a sibling .env for these ${...} substitutions, so
+    # `docker compose up` works whether or not a .env exists.
+    environment:
+      AVAILITY_CLIENT_ID: "${AVAILITY_CLIENT_ID:-}"
+      AVAILITY_CLIENT_SECRET: "${AVAILITY_CLIENT_SECRET:-}"
+      AVAILITY_BASE_URL: "${AVAILITY_BASE_URL:-https://api.availity.com/availity}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else sys.exit(1)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
